@@ -1,18 +1,30 @@
-//XXX XXX THIS DOES NOT WORK!  I DO NOT KNOW WHY!
+//This is for ONE BIT SHIFT REGISTER OUTPUT
+
+//Parts from: from https://github.com/pewit-tech/esp32-i2s/blob/master/i2s_freertos.c
+
 
 //Almost entirelly lifted directly from https://github.com/igrr/esp32-cam-demo
 //Just clocked a little differently and has chained buffers.
 //This totes works with the I2S bus on the ESP32 for READING 16 wires simultaneously.
 //Can be clocked off of I2S's internal controller or an external clock.
 
+
+#define I2S_CLK 22
+//#define I2S_CLKO 13
+//#define I2S_CLKOWS 2
+
+#define MANYBITS
+
+#ifdef MANYBITS
+
 #define I2S_D0 4
 #define I2S_D1 5
 #define I2S_D2 18
 #define I2S_D3 19
-#define I2S_D4 36
-#define I2S_D5 39
-#define I2S_D6 34
-#define I2S_D7 35
+#define I2S_D4 15
+#define I2S_D5 3
+#define I2S_D6 14
+#define I2S_D7 12
 
 #define I2S_D8 32
 #define I2S_D9 33
@@ -23,12 +35,8 @@
 #define I2S_D14 12
 #define I2S_D15 13
 
-#define I2S_CLK 22
-//#define I2S_CLKO 13
-//#define I2S_CLKOWS 2
-
-#define I2S_HZ 10000000
-//#define I2S_HZ 1000000
+#define I2S_D23 17
+#endif
 
 
 
@@ -54,7 +62,7 @@ static void i2s_run();
 static void enable_out_clock();
 
 
-uint16_t * i2sbufferOut[3] __attribute__((aligned(128)));
+uint32_t * i2sbufferOut[3] __attribute__((aligned(128)));
 static lldesc_t s_dma_desc[3];
 static int i2s_running;
 volatile unsigned isr_countOut;
@@ -62,7 +70,7 @@ volatile unsigned isr_countOut;
 
 void SetupI2SOut()
 {
-	enable_out_clock();
+//	enable_out_clock();
     i2s_init();
 	dma_desc_init();
 	i2s_run();
@@ -83,15 +91,16 @@ static esp_err_t dma_desc_init()
         s_dma_desc[i].eof = 1;
         s_dma_desc[i].qe.stqe_next = &s_dma_desc[(i+1)%3];
 		int k;
-		for( k = 0; k < BUFF_SIZE_BYTES/2; k++ )
+		for( k = 0; k < BUFF_SIZE_BYTES/4; k++ )
 		{
-			i2sbufferOut[i][k] = (k&2)?0xFFFF:0x0000;
+//			i2sbufferOut[i][k] = (k&1)?0x0000FfFF:0xaaaaaaaa;
+			i2sbufferOut[i][k] = (k&1)?0xffffffff:0;
 		}
     }
     return ESP_OK;
 }
 
-
+/*
 static void enable_out_clock() {
     periph_module_enable(PERIPH_LEDC_MODULE);
 
@@ -118,12 +127,14 @@ static void enable_out_clock() {
     }
 
 }
-
+*/
 
 static void i2s_init()
 {
     xt_set_interrupt_handler(ETS_I2S0_INUM, &i2s_isr, NULL);
     intr_matrix_set(0, ETS_I2S0_INTR_SOURCE, ETS_I2S0_INUM);
+
+#ifdef MANYBITS
 
     gpio_num_t pins[] = {
             I2S_D15,
@@ -143,8 +154,16 @@ static void i2s_init()
             I2S_D2,
             I2S_D1,
             I2S_D0,
-			I2S_CLK,
+			16,17
     };
+
+#else
+    gpio_num_t pins[] = {
+            17,
+            18,
+			19,
+    };
+#endif
 
     gpio_config_t conf = {
             .mode = GPIO_MODE_OUTPUT,
@@ -157,6 +176,7 @@ static void i2s_init()
         gpio_config(&conf);
     }
 
+#ifdef MANYBITS
     gpio_matrix_out(I2S_D0,    I2S0O_DATA_OUT0_IDX, false,false);
     gpio_matrix_out(I2S_D1,    I2S0O_DATA_OUT1_IDX, false,false);
     gpio_matrix_out(I2S_D2,    I2S0O_DATA_OUT2_IDX, false,false);
@@ -174,29 +194,22 @@ static void i2s_init()
     gpio_matrix_out(I2S_D13,    I2S0O_DATA_OUT13_IDX, false,false);
     gpio_matrix_out(I2S_D14,    I2S0O_DATA_OUT14_IDX, false,false);
     gpio_matrix_out(I2S_D15,    I2S0O_DATA_OUT15_IDX, false,false);
+    gpio_matrix_out(GPIO_NUM_16, I2S0O_BCK_OUT_IDX, 0, 0);
+    gpio_matrix_out(I2S_D23,    I2S0O_DATA_OUT23_IDX, false,false);
+//    gpio_matrix_out(GPIO_NUM_17, I2S0O_WS_OUT_IDX, 0, 0);
+#else
+    gpio_matrix_out(GPIO_NUM_17, I2S0O_DATA_OUT23_IDX, 0, 0);
+    gpio_matrix_out(GPIO_NUM_19, I2S0O_BCK_OUT_IDX, 0, 0);
+    gpio_matrix_out(GPIO_NUM_18, I2S0O_WS_OUT_IDX, 0, 0);
+#endif
+
 
 	//This magic is needed to enable the bus!
-//    gpio_matrix_in(0x38,    I2S0O_V_SYNC_IDX, false);
-//    gpio_matrix_in(0x38, 	I2S0O_H_SYNC_IDX, false);
-// 	gpio_matrix_in(0x38,    I2S0O_H_ENABLE_IDX, false);
+//    gpio_matrix_in(0x38,    I2S0I_V_SYNC_IDX, false);
+//    gpio_matrix_in(0x38, 	I2S0I_H_SYNC_IDX, false);
+// 	gpio_matrix_in(0x38,    I2S0I_H_ENABLE_IDX, false);
 
 //Whether the bus is self-clocking, or accepting an external clock.
-#define SLAVE_MOD 0
-
-#if SLAVE_MOD
-    gpio_matrix_out(I2S_CLK,  I2S0I_WS_IN_IDX, false);
-
-//    gpio_matrix_in(I2S_CLKO,  I2S0O_BCK_OUT_IDX, false);
-//    gpio_matrix_in(I2S_CLKOWS,  I2S0O_WS_OUT_IDX, false);
-
-#else
-
-	conf.mode = GPIO_MODE_OUTPUT;
-    conf.pin_bit_mask = 1LL << I2S_CLK;
-    gpio_config(&conf);
-    gpio_matrix_out(I2S_CLK,  I2S0O_BCK_OUT_IDX, false, 0 );
-
-#endif
     periph_module_enable(PERIPH_I2S0_MODULE);
 
 
@@ -211,17 +224,23 @@ static void i2s_init()
     SET_PERI_REG_BITS(I2S_CONF_REG(0), 0x1, 1, I2S_TX_FIFO_RESET_S);
     SET_PERI_REG_BITS(I2S_CONF_REG(0), 0x1, 0, I2S_TX_FIFO_RESET_S);
 
+    SET_PERI_REG_BITS(I2S_CONF_REG(0), 0x1, 0, I2S_TX_SLAVE_MOD_S);  //Needed, otherwise it waits for a clock.
+	SET_PERI_REG_MASK(I2S_CONF_REG(0), I2S_TX_MSB_SHIFT);
+	WRITE_PERI_REG(I2S_CONF2_REG(0), 0);
 
-#if SLAVE_MOD
-    SET_PERI_REG_BITS(I2S_CONF_REG(0), 0x1, 1, I2S_TX_SLAVE_MOD_S);
-#else
-    SET_PERI_REG_BITS(I2S_CONF_REG(0), 0x1, 0, I2S_TX_SLAVE_MOD_S);
-#endif
+#ifdef MANYBITS
     SET_PERI_REG_BITS(I2S_CONF2_REG(0), 0x1, 1, I2S_LCD_EN_S);
-    SET_PERI_REG_BITS(I2S_CONF2_REG(0), 0x1, 1, I2S_CAMERA_EN_S);
+//    SET_PERI_REG_BITS(I2S_CONF1_REG(0), 0x1, 1, I2S_TX_PCM_BYPASS); //Breaks everything
+//    SET_PERI_REG_BITS(I2S_CONF2_REG(0), 0x1, 1, I2S_CAMERA_EN_S);
+    SET_PERI_REG_BITS(I2S_CLKM_CONF_REG(0), I2S_CLKM_DIV_A, 1, I2S_CLKM_DIV_A_S);
+    SET_PERI_REG_BITS(I2S_CLKM_CONF_REG(0), I2S_CLKM_DIV_B, 1, I2S_CLKM_DIV_B_S);
 
+#else
     SET_PERI_REG_BITS(I2S_CLKM_CONF_REG(0), I2S_CLKM_DIV_A, 0, I2S_CLKM_DIV_A_S);
     SET_PERI_REG_BITS(I2S_CLKM_CONF_REG(0), I2S_CLKM_DIV_B, 0, I2S_CLKM_DIV_B_S);
+
+#endif
+
     SET_PERI_REG_BITS(I2S_CLKM_CONF_REG(0), I2S_CLKM_DIV_NUM, 1, I2S_CLKM_DIV_NUM_S);  //Setting to 0 wrecks it up.
 
 
@@ -232,18 +251,34 @@ static void i2s_init()
 //    SET_PERI_REG_BITS(I2S_CONF_REG(0), 0x1, 1, I2S_RX_SHORT_SYNC_S); //
 //	SET_PERI_REG_BITS(I2S_SAMPLE_RATE_CONF_REG(0), I2S_RX_BCK_DIV_NUM, 1, I2S_RX_BCK_DIV_NUM_S);
 
+#ifdef MANYBITS
+    SET_PERI_REG_BITS(I2S_CONF_REG(0), 0x1, 0, I2S_TX_MONO_S);
+#else
+    SET_PERI_REG_BITS(I2S_CONF_REG(0), 0x1, 1, I2S_TX_RIGHT_FIRST_S);	//Seem ignored in parallel mode
+    SET_PERI_REG_BITS(I2S_CONF_REG(0), 0x1, 1, I2S_TX_MSB_RIGHT_S);//Seem ignored in parallel mode
+    SET_PERI_REG_BITS(I2S_CONF_REG(0), 0x1, 1, I2S_TX_MSB_SHIFT_S);//Seem ignored in parallel mode
+    SET_PERI_REG_BITS(I2S_CONF_REG(0), 0x1, 1, I2S_TX_MONO_S);
+    SET_PERI_REG_BITS(I2S_CONF_REG(0), 0x1, 1, I2S_TX_SHORT_SYNC_S); //Seem ignored in parallel mode
+
+#endif
+//    SET_PERI_REG_BITS(I2S_CONF_REG(0), 0x1, 1, I2S_TX_MONO_S);
+//    SET_PERI_REG_BITS(I2S_CONF_REG(0), 0x1, 0, I2S_TX_RIGHT_FIRST_S);	//Seem ignored in parallel mode
+//    SET_PERI_REG_BITS(I2S_CONF_REG(0), 0x1, 1, I2S_TX_SHORT_SYNC_S); //Seem ignored in parallel mode
 
     SET_PERI_REG_BITS(I2S_FIFO_CONF_REG(0), 0x1, 1, I2S_DSCR_EN_S);
 
-    SET_PERI_REG_BITS(I2S_CONF_REG(0), 0x1, 0, I2S_TX_RIGHT_FIRST_S);	//Seem ignored in parallel mode
-    SET_PERI_REG_BITS(I2S_CONF_REG(0), 0x1, 0, I2S_TX_MSB_RIGHT_S);//Seem ignored in parallel mode
-    SET_PERI_REG_BITS(I2S_CONF_REG(0), 0x1, 0, I2S_TX_MSB_SHIFT_S);//Seem ignored in parallel mode
-    SET_PERI_REG_BITS(I2S_CONF_REG(0), 0x1, 1, I2S_TX_MONO_S);
-    SET_PERI_REG_BITS(I2S_CONF_REG(0), 0x1, 1, I2S_TX_SHORT_SYNC_S); //Seem ignored in parallel mode
+#ifdef MANYBITS
     SET_PERI_REG_BITS(I2S_FIFO_CONF_REG(0), I2S_TX_FIFO_MOD, 1, I2S_TX_FIFO_MOD_S);
     SET_PERI_REG_BITS(I2S_FIFO_CONF_REG(0), 0x1, 1, I2S_TX_FIFO_MOD_FORCE_EN_S);
     SET_PERI_REG_BITS(I2S_CONF_CHAN_REG(0), I2S_TX_CHAN_MOD, 1, I2S_TX_CHAN_MOD_S);
 	SET_PERI_REG_BITS(I2S_SAMPLE_RATE_CONF_REG(0), I2S_TX_BITS_MOD, 8, I2S_TX_BITS_MOD_S);
+#else
+	//I think is needed?  I don't know!!!
+    SET_PERI_REG_BITS(I2S_FIFO_CONF_REG(0), I2S_TX_FIFO_MOD, 1, I2S_TX_FIFO_MOD_S);
+    SET_PERI_REG_BITS(I2S_FIFO_CONF_REG(0), 0x1, 1, I2S_TX_FIFO_MOD_FORCE_EN_S);
+    SET_PERI_REG_BITS(I2S_CONF_CHAN_REG(0), I2S_TX_CHAN_MOD, 1, I2S_TX_CHAN_MOD_S);
+	SET_PERI_REG_BITS(I2S_SAMPLE_RATE_CONF_REG(0), I2S_TX_BITS_MOD, 16, I2S_TX_BITS_MOD_S);
+#endif
 
 	//If you don't do this, BCK will be limited to 13.3333 MHz.
 

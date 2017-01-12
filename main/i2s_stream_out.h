@@ -5,7 +5,7 @@
 #define BUFF_SIZE_BYTES 2048
 
 extern volatile unsigned isr_countOut;
-extern uint16_t * i2sbufferOut[3] __attribute__((aligned(128)));
+extern uint32_t * i2sbufferOut[3];
 
 void SetupI2SOut();
 void TickI2SOut();

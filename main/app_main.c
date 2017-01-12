@@ -30,17 +30,26 @@
 
 void asmtest();
 
-volatile void my_asmtest()
-{
-	__asm__("nop");
-}
-
 uint32_t mydata;
 
 void app_main()
 {
-//	SetupI2SOut();
-//	TickI2SOut();
+
+#define I2SOTEST
+
+#ifdef I2SOTEST
+	SetupI2SOut();
+	TickI2SOut();
+
+	while(true)
+	{
+		printf( "%d %08x\n", isr_countOut, i2sbufferOut[0][3] );
+        vTaskDelay(1000 / portTICK_RATE_MS);
+	}
+
+#endif
+
+#ifdef GPIOASMTEST
 
     gpio_config_t conf = {
             .mode = GPIO_MODE_OUTPUT,
@@ -65,5 +74,8 @@ void app_main()
 //		printf( "%d %08x\n", isr_countOut, i2sbufferOut[0][3] );
 //        vTaskDelay(1000 / portTICK_RATE_MS);
 	}
+
+#endif
+
 }
 
