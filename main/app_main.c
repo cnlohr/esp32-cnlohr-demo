@@ -1,3 +1,4 @@
+
 // Copyright 2015-2016 Espressif Systems (Shanghai) PTE LTD
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -36,6 +37,8 @@
 #include "esp_event_loop.h"
 #include "nvs_flash.h"
 
+#include "i2s_stream_fast.h"
+
 void asmtest();
 
 uint32_t mydata;
@@ -61,7 +64,7 @@ void app_main()
 	wifi_config_t sta_config = {
 		.sta = {
 		    .ssid = "charles",
-		    .password = "wifimadeeasy",
+		    .password = "thisiswifi",
 		    .bssid_set = false
 		}
 	};
@@ -73,8 +76,23 @@ void app_main()
 
 
 
-#define I2SOTEST
+#define I2SOTEST_FAST
 
+
+#ifdef I2SOTEST_FAST
+	printf( "!!!!!!!!!!!!!!!!!!!!!!1\n" );
+	SetupI2SOut_fast();
+	printf( "!!!!!!!!!!!!!!!!!!!!!!2\n" );
+	TickI2SOut_fast();
+	printf( "!!!!!!!!!!!!!!!!!!!!!!3\n" );
+
+	while(true)
+	{
+		printf( "%d %08x\n", isr_countOut_fast, i2sbufferOut_fast[0][3] );
+        vTaskDelay(1000 / portTICK_RATE_MS);
+	}
+
+#endif
 #ifdef I2SOTEST
 	SetupI2SOut();
 	TickI2SOut();
