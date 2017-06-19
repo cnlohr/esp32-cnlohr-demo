@@ -39,8 +39,15 @@
 
 #include "i2s_stream_fast.h"
 
-void asmtest();
+#include <soc/gpio_struct.h>
 
+void asmtest();
+int test_fast_gpio();
+
+#define XT_INTEXC_HOOK_NUM  (1 + XCHAL_NUM_INTLEVELS + XCHAL_HAVE_NMI)
+extern  volatile void * _xt_intexc_hooks[XT_INTEXC_HOOK_NUM];
+
+void _my_xt_nmi();
 uint32_t mydata;
 
 
@@ -51,7 +58,7 @@ esp_err_t event_handler(void *ctx, system_event_t *event)
 
 void app_main()
 {
-#define DO_WIFI
+//#define DO_WIFI
 #ifdef DO_WIFI
 
 	nvs_flash_init();
@@ -74,6 +81,53 @@ void app_main()
 #endif
 
 
+
+//#define GPIO_ASM_TEST
+#ifdef GPIO_ASM_TEST
+	GPIO.enable_w1ts = 1<<17;
+	GPIO.out_w1ts = 1<<17;
+	GPIO.out_w1tc = 1<<17;
+	GPIO.out_w1ts = 1<<17;
+	GPIO.out_w1tc = 1<<17;
+	int rr = test_fast_gpio();
+	//printf( "TFGPIO: %08x\n",  );
+	while(1)
+	{
+		GPIO.out_w1ts = 1<<17;
+		GPIO.out_w1tc = 1<<17;
+	}
+#endif
+
+#define NMI_TEST
+#ifdef NMI_TEST
+	GPIO.func_out_sel_cfg[16].func_sel = 256;
+	WRITE_PERI_REG( DR_REG_IO_MUX_BASE +0x4c,  0xa00 ); //GPIO 16 GPIO.
+	printf( "%08x %08x %d %d\n", READ_PERI_REG( DR_REG_IO_MUX_BASE +0x4c ), READ_PERI_REG( DR_REG_IO_MUX_BASE +0x50 ), GPIO.func_out_sel_cfg[16].val, GPIO.func_out_sel_cfg[17].val  );
+	GPIO.enable_w1ts = 1<<17;
+	GPIO.enable_w1ts = 1<<16;
+
+	GPIO.out_w1ts = 1<<16;
+	GPIO.out_w1tc = 1<<16;
+	GPIO.out_w1ts = 1<<16;
+	GPIO.out_w1tc = 1<<16;
+
+	_xt_intexc_hooks[XCHAL_NMILEVEL] = &_my_xt_nmi;
+
+	GPIO.pin[0].int_ena = GPIO_PRO_CPU_NMI_INTR_ENA; ///Why can't I set the app CPU?
+	GPIO.pin[0].int_type = 3; //Level-change trigger.
+
+	#define ETS_GPIO_INUM 14 //Actually NMI vector.
+	intr_matrix_set( 0, ETS_GPIO_NMI_SOURCE, ETS_GPIO_INUM );
+	ESP_INTR_ENABLE( ETS_GPIO_INUM );
+
+
+	while(1)
+	{
+		GPIO.out_w1ts = 1<<17;
+		GPIO.out_w1tc = 1<<17;
+
+	}
+#endif
 
 
 #define I2SOTEST_FAST
