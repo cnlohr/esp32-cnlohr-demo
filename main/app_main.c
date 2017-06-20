@@ -41,6 +41,8 @@
 
 #include <soc/gpio_struct.h>
 
+#include <esp_heap_alloc_caps.h>
+
 void asmtest();
 int test_fast_gpio();
 
@@ -54,6 +56,24 @@ uint32_t mydata;
 esp_err_t event_handler(void *ctx, system_event_t *event)
 {
     return ESP_OK;
+}
+
+
+volatile int ok2go = 0;
+volatile int running2go = 0;
+
+void start_cpu1()
+{
+	while(!ok2go);
+	running2go = 1;
+	while(1)
+	{
+		asm volatile( "nop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\n" );		
+		GPIO.out_w1ts = 1<<16;
+		asm volatile( "nop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\n" );		
+		GPIO.out_w1tc = 1<<16;
+	}
+
 }
 
 void app_main()
@@ -93,6 +113,7 @@ void app_main()
 	//printf( "TFGPIO: %08x\n",  );
 	while(1)
 	{
+
 		GPIO.out_w1ts = 1<<17;
 		GPIO.out_w1tc = 1<<17;
 	}
@@ -100,11 +121,38 @@ void app_main()
 
 #define NMI_TEST
 #ifdef NMI_TEST
+
+
+    gpio_config_t conf_gp = {
+            .mode = GPIO_MODE_OUTPUT,
+            .pull_up_en = GPIO_PULLUP_DISABLE,
+            .pull_down_en = GPIO_PULLDOWN_DISABLE,
+            .intr_type = GPIO_INTR_DISABLE,
+			.pin_bit_mask = 1LL << 18 | 1LL<<16 | 1LL<<17
+    };
+    gpio_config(&conf_gp);
+
+/*
+	GPIO.func_out_sel_cfg[18].func_sel = 256;
+	WRITE_PERI_REG( DR_REG_IO_MUX_BASE +0x54,  0x1b00 ); //GPIO 18 GPIO.
 	GPIO.func_out_sel_cfg[16].func_sel = 256;
-	WRITE_PERI_REG( DR_REG_IO_MUX_BASE +0x4c,  0xa00 ); //GPIO 16 GPIO.
-	printf( "%08x %08x %d %d\n", READ_PERI_REG( DR_REG_IO_MUX_BASE +0x4c ), READ_PERI_REG( DR_REG_IO_MUX_BASE +0x50 ), GPIO.func_out_sel_cfg[16].val, GPIO.func_out_sel_cfg[17].val  );
-	GPIO.enable_w1ts = 1<<17;
-	GPIO.enable_w1ts = 1<<16;
+	WRITE_PERI_REG( DR_REG_IO_MUX_BASE +0x4c,  0x2800 ); //GPIO 16 GPIO.
+
+*/
+/*
+	char *Buf = pvPortMallocCaps(1000, MALLOC_CAP_8BIT); 
+	typedef struct  {
+		char *BufStartAdress;
+	}paramSet;
+	paramSet *ParamPTR = pvPortMallocCaps(8, MALLOC_CAP_32BIT);
+	ParamPTR->BufStartAdress    = Buf;
+	int xReturned2=  xTaskCreatePinnedToCore(&run_on_core_2, "RealTimeThread", 2048, ParamPTR, 25, NULL, 1);
+*/
+
+	printf( "%08x %08x %d %d\n", READ_PERI_REG( DR_REG_IO_MUX_BASE +0x4c ), READ_PERI_REG( DR_REG_IO_MUX_BASE +0x50 ), GPIO.func_out_sel_cfg[16].val, GPIO.func_out_sel_cfg[17].val );
+//	GPIO.enable_w1ts = 1<<18;
+//	GPIO.enable_w1ts = 1<<17;
+//	GPIO.enable_w1ts = 1<<16;
 
 	GPIO.out_w1ts = 1<<16;
 	GPIO.out_w1tc = 1<<16;
@@ -120,18 +168,21 @@ void app_main()
 	intr_matrix_set( 0, ETS_GPIO_NMI_SOURCE, ETS_GPIO_INUM );
 	ESP_INTR_ENABLE( ETS_GPIO_INUM );
 
+	ok2go = 1;
+	printf( "Attached\n" );
 
 	while(1)
 	{
+		asm volatile( "nop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\n" );		
 		GPIO.out_w1ts = 1<<17;
+		asm volatile( "nop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\n" );		
 		GPIO.out_w1tc = 1<<17;
-
+		//printf( "Running2go: %d\n", running2go );
 	}
 #endif
 
 
-#define I2SOTEST_FAST
-
+//#define I2SOTEST_FAST
 
 #ifdef I2SOTEST_FAST
 	printf( "!!!!!!!!!!!!!!!!!!!!!!1\n" );
@@ -159,6 +210,7 @@ void app_main()
 
 #endif
 
+#define GPIOASMTEST
 #ifdef GPIOASMTEST
 
     gpio_config_t conf = {
@@ -166,9 +218,12 @@ void app_main()
             .pull_up_en = GPIO_PULLUP_DISABLE,
             .pull_down_en = GPIO_PULLDOWN_DISABLE,
             .intr_type = GPIO_INTR_DISABLE,
-			.pin_bit_mask = 1LL << 18
+			.pin_bit_mask = 1LL << 18 | 1LL<<16
     };
     gpio_config(&conf);
+
+	printf( "%08x %08x %d %d\n", READ_PERI_REG( DR_REG_IO_MUX_BASE +0x4c ), READ_PERI_REG( DR_REG_IO_MUX_BASE +0x54 ), GPIO.func_out_sel_cfg[16].val, GPIO.func_out_sel_cfg[18].val );
+
 
 	while(true)
 	{
