@@ -1,6 +1,22 @@
 #define XCHAL_NMILEVEL       7/* NMI "level" (for use with */
 
 
+
+.global test_asm_call
+.section .iram1,"ax"
+.align 4
+test_asm_call:
+	entry   a1, 32
+//	rsr a2, 177
+//	wsr a2, MISC0
+//	rur a2, 0
+//	.byte 0x20, 0x00, 0xe3
+//	.byte 0x22, 0x22, 0xe3 //RUR (Doesn't work)
+	.byte 0x20, 234, 0x03 //RSR
+
+	retw
+
+
 .global asmtest
 .align 4
 
@@ -65,8 +81,8 @@ tg:
 
 
 
-
 //My terrible ISR WORKS!
+
 	.global _my_xt_nmi
     .section .iram1,"ax"
     .type       _my_xt_nmi,@function
@@ -189,6 +205,80 @@ _xt_loop:
 	nop
 	addi a4, a4, -1
 	bnez a4, _xt_loop
+
+	movi a3, 1
+	s32i a3, a2, 0x4c //Status w1tc
+
+	l32i a4, a1, 12
+	l32i a3, a1, 8
+	l32i a2, a1, 4
+	addi a1, a1, 68
+    rsr     a0, EXCSAVE7    /* restore a0 */
+    rfi     XCHAL_NMILEVEL
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//USB in stream test
+	.global _my_usb_stream_xt_nmi
+    .section .iram1,"ax"
+    .type       _my_usb_stream_xt_nmi,@function
+    .align      4
+
+_my_usb_stream_xt_nmi:
+	addi a1, a1, -68
+	s32i a2, a1, 4
+	s32i a3, a1, 8
+	s32i a4, a1, 12
+
+	//TODO:
+	// (0) Clear I2S Data
+	// (1) Start I2S engine
+	// (1.5) Start timer
+	// (2) Monitor output for when it's complete
+	// (3) Stop I2S Engine
+	// (4) Stop timer.
+	movi a2, GPIO
+	movi a3, 1<<18
+	movi a4, 200
+_uxt_loop:
+	s32i a3, a2, 8   //W1TS
+	s32i a3, a2, 12  //W1TC
+	addi a4, a4, -1
+	bnez a4, _uxt_loop
 
 	movi a3, 1
 	s32i a3, a2, 0x4c //Status w1tc

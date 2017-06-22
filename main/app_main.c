@@ -38,7 +38,7 @@
 #include "nvs_flash.h"
 
 #include "i2s_stream_fast.h"
-
+#include "i2s_stream_in_for_usb.h"
 #include <soc/gpio_struct.h>
 
 #include <esp_heap_alloc_caps.h>
@@ -100,7 +100,37 @@ void app_main()
 	ESP_ERROR_CHECK( esp_wifi_connect() );
 #endif
 
+#define HIGH_PERF_I2S_IN
+#ifdef HIGH_PERF_I2S_IN
+	SetupI2SInUSB();
+	TickI2SInUSB();
 
+	{
+		uint32_t lastcount = 0;
+		while(true)
+		{
+    	    vTaskDelay(1000 / portTICK_RATE_MS);
+			printf( "%d %08x\n", isr_countInUSB-lastcount, i2sbufferInUSB[0][0] );
+			lastcount = isr_countInUSB;
+		}
+	}
+
+#endif
+
+//#define TEST_ASM_RET_CALL
+#ifdef TEST_ASM_RET_CALL
+	int test_asm_call(int i);
+	uint8_t re = 0;
+	while(1)
+	{
+		re++;
+
+		//((uint8_t*)test_asm_call)[4] = 177;
+		int ret = test_asm_call(re);
+		//printf( "%08x\n", ((uint32_t)&test_asm_call) );
+		printf( "%d %d\n", re, ret );
+	}
+#endif
 
 //#define GPIO_ASM_TEST
 #ifdef GPIO_ASM_TEST
@@ -122,6 +152,7 @@ void app_main()
 #define NMI_TEST
 #ifdef NMI_TEST
 
+	printf( "NMI TEST\n" );
 
     gpio_config_t conf_gp = {
             .mode = GPIO_MODE_OUTPUT,
@@ -221,7 +252,7 @@ void app_main()
 			.pin_bit_mask = 1LL << 18 | 1LL<<16
     };
     gpio_config(&conf);
-
+	printf( "GPIO ASM TEST\n" );
 	printf( "%08x %08x %d %d\n", READ_PERI_REG( DR_REG_IO_MUX_BASE +0x4c ), READ_PERI_REG( DR_REG_IO_MUX_BASE +0x54 ), GPIO.func_out_sel_cfg[16].val, GPIO.func_out_sel_cfg[18].val );
 
 
